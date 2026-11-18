@@ -1,0 +1,54 @@
+apiVersion: ai.sap.com/v1alpha1
+kind: ServingTemplate
+metadata:
+  name: effort-model-storage-serving
+  annotations:
+    scenarios.ai.sap.com/description: "Effort estimation using an Object Storage Key"
+    scenarios.ai.sap.com/name: "effort-estimation-storage"
+    executables.ai.sap.com/description: "XGBoost inference with an input model artifact"
+    executables.ai.sap.com/name: "effort-model-storage-server"
+    artifacts.ai.sap.com/effortmodel.kind: "model"
+  labels:
+    scenarios.ai.sap.com/id: "effort-estimation-storage"
+    ai.sap.com/version: "1.0.0"
+spec:
+  inputs:
+    artifacts:
+      - name: effortmodel
+  template:
+    apiVersion: serving.kserve.io/v1beta1
+    metadata:
+      labels: '{"ai.sap.com/resourcePlan":"infer.m"}'
+    spec: |
+      predictor:
+        minReplicas: 1
+        maxReplicas: 2
+        containers:
+          - name: kserve-container
+            image: sunyoucai2/effort-model:1.0.4
+            command: ["python", "-c"]
+            args:
+              - |
+                import os
+                import sys
+
+                candidates = [
+                    "/mnt/models/effort_model.pkl",
+                    "/mnt/models/ml_models/effort_model.pkl",
+                ]
+                model_path = next((p for p in candidates if os.path.isfile(p)), None)
+                if model_path is None:
+                    sys.exit("Model artifact missing. Checked: " + ", ".join(candidates))
+
+                destination = "/tmp/effort_model.pkl"
+                if os.path.lexists(destination):
+                    os.unlink(destination)
+                os.symlink(model_path, destination)
+                print("Model artifact: " + model_path, flush=True)
+                os.execv(sys.executable, [sys.executable, "/app/serve.py"])
+            ports:
+              - containerPort: 8080
+                protocol: TCP
+            env:
+              - name: STORAGE_URI
+                value: "{{inputs.artifacts.effortmodel}}"

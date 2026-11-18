@@ -1,0 +1,9 @@
+.env
+.env.*
+!.env.example
+*.pkl
+*.joblib
+*.pem
+*.key
+__pycache__/
+.venv/
